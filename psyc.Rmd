@@ -1,0 +1,120 @@
+---
+title: "Final project"
+author: "Jialin"
+date: "3/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(readxl)
+library(tidyverse)
+library(GGally)
+library(MASS)
+library(leaps)
+library(car)
+```
+
+get data
+
+```{r}
+data <- read_excel("data.xls")
+data$gender=as.factor(data$gender)
+data$group=as.factor(data$group)
+
+data1<-data%>%
+  mutate(selfcom=(self_kindness+self_judgment_reverse_scored+common_humanity+isolation_reverse_scored+mindfulness+over_identification_reverse_scored)/6)%>%
+  dplyr::select(-self_compassion)
+
+```
+
+Separate the data into a training and testing dataset
+
+```{r}
+set.seed(323)
+partition<-createDataPartition(data1$depression,p=0.7,list = FALSE)
+psyc.train<-data1[partition,]
+psyc.test<-data1[-partition,]
+```
+
+```{r, echo=FALSE}
+ggpairs(data=psyc.train, progress = FALSE)
+```
+
+4. Perform Forward Selection.
+
+```{r} 
+model_base <- lm(depression ~ 1, data = psyc.train)
+model_full <- lm(depression ~ ., data = psyc.train)
+stepAIC(model_base, scope = list(upper = model_full, lower = model_base), direction = "forward", trace = FALSE)$anova
+```
+
+5. Perform Backward Elimination.
+
+```{r}
+stepAIC(model_full, direction = "backward", trace = FALSE)$anova
+```
+
+6. Perform Mixed Selection.
+
+```{r}
+stepAIC(model_base, scope = list(upper = model_full, lower = model_base), direction = "both", trace = FALSE)$anova
+stepAIC(model_full, scope = list(upper = model_full, lower = model_base), direction = "both", trace = FALSE)$anova
+```
+
+7. Run an all-subsets selection technique.
+
+```{r}
+model_subset <- regsubsets(depression ~ ., nbest = 3, data = psyc.train)
+plot(model_subset)
+```
+
+final model:
+
+```{r}
+model1 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + 
+    anxiety , data = psyc.train)
+#I will choose this one, make more sense.
+summary(model1)
+```
+
+remove outlier in training data:
+
+```{r}
+psyc.train.new <-psyc.train %>% 
+  mutate(leverage = hatvalues(model1),
+         studres = studres(model1),
+         cooks = cooks.distance(model1),
+         id = row_number())
+
+ggplot(data = psyc.train.new) + 
+  geom_point(mapping=aes(x = id, y = cooks)) + 
+  ggtitle("Leverage vs. ID")+ xlab("ID Code") + ylab("Leverage")+
+  ggrepel::geom_text_repel(aes(y=cooks, x=id, label=id),
+                           data = psyc.train.new %>% 
+                             filter(leverage>0.4|studres>2|studres< -2|cooks> 0.3))
+
+psyc.train<-psyc.train[-c(65, 276), ]
+```
+
+final model using test data:
+
+```{r}
+model2 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety , data = psyc.test)
+
+summary(model2)
+```
+
+repeated k-fold cross validation:
+
+```{r}
+train.control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
+model3 <- train(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety, data = data1, method ="lm", trControl = train.control)
+model3
+summary(model3)
+```
+
+
+
+
