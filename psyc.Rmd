@@ -14,9 +14,11 @@ library(GGally)
 library(MASS)
 library(leaps)
 library(car)
+library(randomForest)
+library(splines)
 ```
 
-get data
+get the data
 
 ```{r}
 data <- read_excel("data.xls")
@@ -26,7 +28,6 @@ data$group=as.factor(data$group)
 data1<-data%>%
   mutate(selfcom=(self_kindness+self_judgment_reverse_scored+common_humanity+isolation_reverse_scored+mindfulness+over_identification_reverse_scored)/6)%>%
   dplyr::select(-self_compassion)
-
 ```
 
 Separate the data into a training and testing dataset
@@ -70,12 +71,12 @@ model_subset <- regsubsets(depression ~ ., nbest = 3, data = psyc.train)
 plot(model_subset)
 ```
 
-final model:
+linear regression model:
 
 ```{r}
 model1 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + 
     anxiety , data = psyc.train)
-#I will choose this one, make more sense.
+
 summary(model1)
 ```
 
@@ -95,26 +96,75 @@ ggplot(data = psyc.train.new) +
                            data = psyc.train.new %>% 
                              filter(leverage>0.4|studres>2|studres< -2|cooks> 0.3))
 
-psyc.train<-psyc.train[-c(65, 276), ]
+psyc.train1<-psyc.train[-c(65, 276), ]
 ```
 
-final model using test data:
+regression model using testing data:
 
 ```{r}
-model2 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety , data = psyc.test)
-
+model2 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + 
+    anxiety , data = psyc.train1)
 summary(model2)
+pred1 <- predict(model2, newdata = psyc.test)
+mean((psyc.test$depression-pred1)^2)
 ```
 
-repeated k-fold cross validation:
+Repeated k-fold cross validation:
 
 ```{r}
+set.seed(323)
+partition<-createDataPartition(data1$depression,p=0.7,list = FALSE)
+psyc.train<-data1[partition,]
+psyc.test<-data1[-partition,]
+
 train.control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
-model3 <- train(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety, data = data1, method ="lm", trControl = train.control)
-model3
+
+model3 <- train(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety, data = psyc.train, method ="lm", trControl = train.control)
 summary(model3)
+pred2 <- predict(model3, newdata = psyc.test)
+mean((psyc.test$depression-pred2)^2)
 ```
 
+regression tree
+```{r}
+tree_psyc <- tree(depression ~ ., psyc.train)
+summary(tree_psyc)
+```
 
+```{r}
+plot(tree_psyc)
+text(tree_psyc, pretty = 0)
+```
 
+```{r}
+set.seed(9)
+cv_psyc  <-  cv.tree(tree_psyc)
+plot(cv_psyc$size, cv_psyc$dev, type = 'b')
+
+prune_psyc  <-  prune.tree(tree_psyc,
+                             best = 5)
+plot(prune_psyc)
+text(prune_psyc, pretty = 0)
+```
+
+```{r}
+pred3  <-  predict(prune_psyc,newdata = psyc.test)
+
+mean((pred3 - psyc.test$depression)^2)
+```
+
+Random Forests
+
+```{r}
+set.seed(1)
+rf_psyc <- randomForest(depression ~ ., 
+                           data = psyc.train,
+                           mtry = 6,
+                           importance = TRUE)
+varImpPlot(rf_psyc)
+
+bagged_estimate  <-  predict(rf_psyc, 
+                             newdata = psyc.test)
+mean((bagged_estimate - psyc.test$depression)^2)
+```
 
