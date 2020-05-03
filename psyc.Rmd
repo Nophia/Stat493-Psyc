@@ -16,6 +16,7 @@ library(leaps)
 library(car)
 library(randomForest)
 library(splines)
+library(tree)
 ```
 
 get the data
@@ -26,6 +27,7 @@ data$gender=as.factor(data$gender)
 data$group=as.factor(data$group)
 
 data1<-data%>%
+  mutate(isolation_reverse_scored=isolation_reverse_scored+1, self_judgment_reverse_scored=self_judgment_reverse_scored+1, over_identification_reverse_scored=over_identification_reverse_scored+1)%>%
   mutate(selfcom=(self_kindness+self_judgment_reverse_scored+common_humanity+isolation_reverse_scored+mindfulness+over_identification_reverse_scored)/6)%>%
   dplyr::select(-self_compassion)
 ```
@@ -74,8 +76,7 @@ plot(model_subset)
 linear regression model:
 
 ```{r}
-model1 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + 
-    anxiety , data = psyc.train)
+model1 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety , data = psyc.train)
 
 summary(model1)
 ```
@@ -102,8 +103,7 @@ psyc.train1<-psyc.train[-c(65, 276), ]
 regression model using testing data:
 
 ```{r}
-model2 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + 
-    anxiety , data = psyc.train1)
+model2 <- lm(depression ~ group + age + anxious_attachment + avoidant_attachment + isolation_reverse_scored + over_identification_reverse_scored + anxiety , data = psyc.train1)
 summary(model2)
 pred1 <- predict(model2, newdata = psyc.test)
 mean((psyc.test$depression-pred1)^2)
@@ -159,12 +159,17 @@ Random Forests
 set.seed(1)
 rf_psyc <- randomForest(depression ~ ., 
                            data = psyc.train,
-                           mtry = 6,
+                           mtry = 8,
                            importance = TRUE)
+rf_psyc
 varImpPlot(rf_psyc)
 
 bagged_estimate  <-  predict(rf_psyc, 
                              newdata = psyc.test)
 mean((bagged_estimate - psyc.test$depression)^2)
+```
+bagging
+```{r}
+
 ```
 
