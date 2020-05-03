@@ -41,8 +41,29 @@ psyc.train<-data1[partition,]
 psyc.test<-data1[-partition,]
 ```
 
+Visualization
+
 ```{r, echo=FALSE}
-ggpairs(data=psyc.train, progress = FALSE)
+ggplot(data1, aes(x=anxiety, y=depression)) + 
+    geom_point()
+
+ggplot(data1, aes(x=selfcompassion, y=depression)) + 
+    geom_point()
+
+ggplot(data1, aes(x=avoidant_attachment, y=depression)) + 
+    geom_point()
+
+ggplot(data1, aes(x=anxious_attachment, y=depression)) + 
+    geom_point()
+
+ggplot(data1, aes(x=anxious_attachment, y=avoidant_attachment)) + 
+    geom_point()
+
+ggplot(data1, aes(x=isolation, y=depression)) + 
+    geom_point()
+
+ggplot(data1, aes(x=gender, y=depression)) + 
+    geom_point()
 ```
 
 4. Perform Forward Selection.
@@ -124,7 +145,6 @@ train.control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
 model3 <- train(depression ~ anxiety + avoidant_attachment + isolation + over_identification + 
     anxious_attachment + age + group, data = psyc.train, method ="lm", trControl = train.control)
 summary(model3)
-model3$modelInfo
 
 pred2 <- predict(model3, newdata = psyc.test)
 mean((psyc.test$depression-pred2)^2)
@@ -168,13 +188,6 @@ rf_psyc <- randomForest(depression ~ .,
                            mtry = 8,
                            importance = TRUE, ntrees = 500)
 rf_psyc
-
-n.trees = seq(from=10 ,to=500, by=10)
-test_error <- rep(NA, length(num.trees))
-for(i in 1:length(num.trees)){
-  test_error[i] <- mean((predict(rf_psyc, newdata = psyc.test, n.trees=num.trees[i]) - psyc.test$depression)^2)
-}
-plot(num.trees, test_error, type = 'b', xlab="number of trees", ylab = "test error")
 
 varImpPlot(rf_psyc)
 
